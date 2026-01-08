@@ -466,11 +466,23 @@ header h1 {
 }
 
 footer {
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 20px;
     margin-top: 30px;
     color: #666;
     font-size: 14px;
+}
+
+.footer-left {
+    display: flex;
+    align-items: center;
+}
+
+.footer-right {
+    display: flex;
+    align-items: center;
 }
 
 footer a {
@@ -486,8 +498,13 @@ footer a:hover {
     color: #ff601f;
 }
 
-.footer-logo {
+.github-link img {
     height: 20px;
+    width: auto;
+}
+
+.footer-logo {
+    height: 30px;
     width: auto;
     vertical-align: middle;
 }
