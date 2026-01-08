@@ -2,6 +2,8 @@
 
 ![Header](header.png)
 
+**[🌐 Try it online](https://hacod-tech.github.io/Circuit-Board-Pattern-Generator/)**
+
 A web-based application for generating SVG circuit board patterns. Create intricate circuit board designs with customizable lines and circles that can be applied to various shapes including freehand drawings, text, ellipses, and rectangles.
 
 ## Features
