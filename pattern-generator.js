@@ -172,7 +172,11 @@ class PatternGenerator {
             forks: scaledForks,
             lineThickness: scaledLineThickness,
             circleRadius: scaledCircleRadius,
-            lineColor
+            lineColor,
+            gradientType: options.gradientType || 'none',
+            gradientColor: options.gradientColor || lineColor,
+            gradientStartPoint: options.gradientStartPoint,
+            gradientEndPoint: options.gradientEndPoint
         };
     }
 
@@ -275,7 +279,9 @@ class PatternGenerator {
             forks: forks,
             lineThickness,
             circleRadius,
-            lineColor
+            lineColor,
+            gradientType: options.gradientType || 'none',
+            gradientColor: options.gradientColor || lineColor
         };
     }
 
@@ -388,7 +394,9 @@ class PatternGenerator {
             forks: forks,
             lineThickness,
             circleRadius,
-            lineColor
+            lineColor,
+            gradientType: options.gradientType || 'none',
+            gradientColor: options.gradientColor || lineColor
         };
     }
 
@@ -1147,13 +1155,110 @@ class PatternGenerator {
      */
     renderToSVG(pattern, svgElement) {
         const patternLayer = svgElement.querySelector('#patternLayer') || svgElement;
+        const svg = svgElement.ownerSVGElement || svgElement;
 
         // Clear existing pattern
         while (patternLayer.firstChild) {
             patternLayer.removeChild(patternLayer.firstChild);
         }
 
-        // Render segments
+        // Get canvas dimensions for gradient
+        const canvasWidth = parseFloat(svg.getAttribute('width') || svgElement.getAttribute('width') || 800);
+        const canvasHeight = parseFloat(svg.getAttribute('height') || svgElement.getAttribute('height') || 600);
+
+        // Get or create defs for gradients
+        let defs = svg.querySelector('defs');
+        if (!defs) {
+            defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            svg.insertBefore(defs, svg.firstChild);
+        }
+
+        // Clear existing gradients
+        const existingGradients = defs.querySelectorAll('linearGradient, radialGradient');
+        existingGradients.forEach(g => g.remove());
+
+        const gradientType = pattern.gradientType || 'none';
+        const gradientColor = pattern.gradientColor || pattern.lineColor;
+        const baseColor = pattern.lineColor;
+
+        // Use custom gradient points if provided, otherwise use defaults
+        let gradientStart = pattern.gradientStartPoint;
+        let gradientEnd = pattern.gradientEndPoint;
+
+        if (!gradientStart || !gradientEnd) {
+            // Default gradient points
+            if (gradientType === 'linear') {
+                gradientStart = { x: canvasWidth / 2, y: canvasHeight };
+                gradientEnd = { x: canvasWidth / 2, y: 0 };
+            } else {
+                gradientStart = { x: canvasWidth / 2, y: canvasHeight / 2 };
+                gradientEnd = { x: canvasWidth / 2, y: canvasHeight / 2 };
+            }
+        }
+
+        // Create a single global gradient definition if needed
+        let gradientId = null;
+        if (gradientType !== 'none') {
+            gradientId = `patternGradient-${Date.now()}`;
+
+            if (gradientType === 'linear') {
+                // Linear gradient using custom start and end points
+                const linearGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                linearGradient.setAttribute('id', gradientId);
+                linearGradient.setAttribute('x1', gradientStart.x);
+                linearGradient.setAttribute('y1', gradientStart.y);
+                linearGradient.setAttribute('x2', gradientEnd.x);
+                linearGradient.setAttribute('y2', gradientEnd.y);
+                linearGradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+
+                const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop1.setAttribute('offset', '0%');
+                stop1.setAttribute('stop-color', baseColor);
+                linearGradient.appendChild(stop1);
+
+                const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop2.setAttribute('offset', '100%');
+                stop2.setAttribute('stop-color', gradientColor);
+                linearGradient.appendChild(stop2);
+
+                defs.appendChild(linearGradient);
+            } else if (gradientType === 'radial') {
+                // Radial gradient: center at start point, radius to end point
+                const radialGradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+                radialGradient.setAttribute('id', gradientId);
+                radialGradient.setAttribute('cx', gradientStart.x);
+                radialGradient.setAttribute('cy', gradientStart.y);
+                // Calculate radius as distance from start to end point
+                const dx = gradientEnd.x - gradientStart.x;
+                const dy = gradientEnd.y - gradientStart.y;
+                const radius = Math.sqrt(dx * dx + dy * dy) || 100; // Default to 100 if points are same
+                radialGradient.setAttribute('r', radius);
+                radialGradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+
+                const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop1.setAttribute('offset', '0%');
+                stop1.setAttribute('stop-color', baseColor);
+                radialGradient.appendChild(stop1);
+
+                const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop2.setAttribute('offset', '100%');
+                stop2.setAttribute('stop-color', gradientColor);
+                radialGradient.appendChild(stop2);
+
+                defs.appendChild(radialGradient);
+            }
+        }
+
+        // Helper function to set stroke color/gradient
+        const setStroke = (element) => {
+            if (gradientType !== 'none' && gradientId) {
+                element.setAttribute('stroke', `url(#${gradientId})`);
+            } else {
+                element.setAttribute('stroke', baseColor);
+            }
+        };
+
+        // Render segments - all use the same global gradient
         pattern.segments.forEach(segment => {
             if (segment.points.length > 2) {
                 // Curved path
@@ -1163,7 +1268,7 @@ class PatternGenerator {
                 }
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('d', pathData);
-                path.setAttribute('stroke', pattern.lineColor);
+                setStroke(path);
                 path.setAttribute('stroke-width', pattern.lineThickness);
                 path.setAttribute('fill', 'none');
                 patternLayer.appendChild(path);
@@ -1174,32 +1279,32 @@ class PatternGenerator {
                 line.setAttribute('y1', segment.start.y);
                 line.setAttribute('x2', segment.end.x);
                 line.setAttribute('y2', segment.end.y);
-                line.setAttribute('stroke', pattern.lineColor);
+                setStroke(line);
                 line.setAttribute('stroke-width', pattern.lineThickness);
                 patternLayer.appendChild(line);
             }
         });
 
-        // Render circles at endpoints (stroke only)
+        // Render circles at endpoints (stroke only) - all use the same global gradient
         pattern.circles.forEach(point => {
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', point.x);
             circle.setAttribute('cy', point.y);
             circle.setAttribute('r', pattern.circleRadius);
             circle.setAttribute('fill', 'none');
-            circle.setAttribute('stroke', pattern.lineColor);
+            setStroke(circle);
             circle.setAttribute('stroke-width', pattern.lineThickness);
             patternLayer.appendChild(circle);
         });
 
-        // Render forks (stroke only)
+        // Render forks (stroke only) - all use the same global gradient
         pattern.forks.forEach(fork => {
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', fork.point.x);
             circle.setAttribute('cy', fork.point.y);
             circle.setAttribute('r', pattern.circleRadius * 1.2);
             circle.setAttribute('fill', 'none');
-            circle.setAttribute('stroke', pattern.lineColor);
+            setStroke(circle);
             circle.setAttribute('stroke-width', pattern.lineThickness);
             patternLayer.appendChild(circle);
         });

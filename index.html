@@ -15,10 +15,35 @@
             <h1>Circuit Board Pattern Generator</h1>
         </header>
 
+        <div class="instructions">
+            <p>Add objects (freehand, text, ellipse, or rectangle) from the left sidebar, then click "Generate Pattern" to fill them with a circuit board pattern.</p>
+        </div>
+
         <div class="controls-panel">
             <div class="control-group">
                 <label for="lineColor">Line Color:</label>
                 <input type="color" id="lineColor" value="#00ff00">
+            </div>
+
+            <div class="control-group">
+                <label for="lineGradientType">Line Gradient:</label>
+                <select id="lineGradientType">
+                    <option value="none">None</option>
+                    <option value="linear">Linear</option>
+                    <option value="radial">Radial</option>
+                </select>
+            </div>
+
+            <div class="control-group" id="gradientColorGroup" style="display: none;">
+                <label for="lineGradientColor">Gradient End Color:</label>
+                <input type="color" id="lineGradientColor" value="#ff00ff">
+            </div>
+
+            <div class="control-group" id="gradientEditGroup" style="display: none;">
+                <label>
+                    <input type="checkbox" id="editGradientPoints">
+                    Edit Gradient Points on Canvas
+                </label>
             </div>
 
             <div class="control-group">
@@ -106,9 +131,11 @@
             </div>
         </div>
 
-        <div class="instructions">
-            <p>Add objects (freehand, text, ellipse, or rectangle) from the left sidebar, then click "Generate Pattern" to fill them with a circuit board pattern.</p>
-        </div>
+        <footer>
+            <a href="https://hacod.tech/" target="_blank" rel="noopener noreferrer">
+                Made by <img src="https://hacod.tech/hubfs/LOGO%20SVG.svg" alt="Hacod Logo" class="footer-logo">
+            </a>
+        </footer>
     </div>
 
     <!-- Text Editor Popup -->
@@ -160,6 +187,11 @@
                     <label for="textStrokeWidth">Stroke Width:</label>
                     <input type="range" id="textStrokeWidth" min="0" max="10" step="0.5" value="1">
                     <span id="strokeWidthValue">1</span>
+                </div>
+                <div class="control-group">
+                    <label for="textLetterSpacing">Letter Spacing:</label>
+                    <input type="range" id="textLetterSpacing" min="-5" max="20" step="0.5" value="0">
+                    <span id="letterSpacingValue">0</span>
                 </div>
             </div>
             <div class="modal-footer">

@@ -11,16 +11,31 @@ class CircuitPatternApp {
         this.isDrawing = false;
         this.isDragging = false;
         this.isResizing = false;
+        this.isMoving = false;
+        this.isDraggingGradient = false;
         this.dragStart = null;
         this.resizeStart = null;
+        this.moveStart = null;
         this.patternGenerator = new PatternGenerator();
         this.currentPattern = null;
         this.nextObjectId = 1;
         this.editingTextObject = null;
+        this.gradientStartPoint = null;
+        this.gradientEndPoint = null;
+        this.draggingGradientHandle = null; // 'start' or 'end'
 
         this.initializeEventListeners();
         this.updateBackground();
         this.updateObjectsList();
+
+        // Initialize gradient color group visibility
+        const gradientType = document.getElementById('lineGradientType').value;
+        const gradientGroup = document.getElementById('gradientColorGroup');
+        if (gradientType === 'none') {
+            gradientGroup.style.display = 'none';
+        } else {
+            gradientGroup.style.display = 'flex';
+        }
     }
 
     initializeEventListeners() {
@@ -73,6 +88,60 @@ class CircuitPatternApp {
             }
         });
 
+        document.getElementById('lineGradientType').addEventListener('change', (e) => {
+            const gradientGroup = document.getElementById('gradientColorGroup');
+            const gradientEditGroup = document.getElementById('gradientEditGroup');
+            if (e.target.value === 'none') {
+                gradientGroup.style.display = 'none';
+                gradientEditGroup.style.display = 'none';
+                this.gradientStartPoint = null;
+                this.gradientEndPoint = null;
+            } else {
+                gradientGroup.style.display = 'flex';
+                gradientEditGroup.style.display = 'flex';
+                // Initialize gradient points if not set
+                if (!this.gradientStartPoint || !this.gradientEndPoint) {
+                    const canvasWidth = parseFloat(this.canvas.getAttribute('width'));
+                    const canvasHeight = parseFloat(this.canvas.getAttribute('height'));
+                    if (e.target.value === 'linear') {
+                        // Default: bottom to top
+                        this.gradientStartPoint = { x: canvasWidth / 2, y: canvasHeight };
+                        this.gradientEndPoint = { x: canvasWidth / 2, y: 0 };
+                    } else {
+                        // Default: center
+                        this.gradientStartPoint = { x: canvasWidth / 2, y: canvasHeight / 2 };
+                        this.gradientEndPoint = { x: canvasWidth / 2, y: canvasHeight / 2 };
+                    }
+                }
+            }
+            if (this.currentPattern) {
+                this.currentPattern.gradientType = e.target.value;
+                this.currentPattern.gradientColor = document.getElementById('lineGradientColor').value;
+                this.currentPattern.gradientStartPoint = this.gradientStartPoint;
+                this.currentPattern.gradientEndPoint = this.gradientEndPoint;
+                this.renderPattern();
+            }
+        });
+
+        document.getElementById('editGradientPoints').addEventListener('change', (e) => {
+            if (e.target.checked && this.currentPattern && this.currentPattern.gradientType !== 'none') {
+                this.renderGradientHandles();
+            } else {
+                this.removeGradientHandles();
+            }
+        });
+
+        document.getElementById('lineGradientColor').addEventListener('input', (e) => {
+            if (this.currentPattern) {
+                this.currentPattern.gradientColor = e.target.value;
+                this.renderPattern();
+                // Update gradient handles if visible
+                if (document.getElementById('editGradientPoints').checked) {
+                    this.renderGradientHandles();
+                }
+            }
+        });
+
         document.getElementById('bgColor').addEventListener('input', () => this.updateBackground());
         document.getElementById('transparentBg').addEventListener('change', () => this.updateBackground());
 
@@ -119,9 +188,18 @@ class CircuitPatternApp {
             document.getElementById('strokeWidthValue').textContent = parseFloat(e.target.value).toFixed(1);
         });
 
+        document.getElementById('textLetterSpacing').addEventListener('input', (e) => {
+            document.getElementById('letterSpacingValue').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+
         // Update text colors when line color changes
         document.getElementById('lineColor').addEventListener('input', () => {
             this.renderObjects();
+            // Update gradient handles if visible
+            if (document.getElementById('editGradientPoints').checked &&
+                this.currentPattern && this.currentPattern.gradientType !== 'none') {
+                this.renderGradientHandles();
+            }
         });
 
         document.getElementById('textEditorSave').addEventListener('click', () => this.saveTextEdit());
@@ -167,6 +245,7 @@ class CircuitPatternApp {
                     fontFamily: 'Inter',
                     fontWeight: '400',
                     strokeWidth: 1,
+                    letterSpacing: 0,
                     scaleX: 1,
                     scaleY: 1
                 };
@@ -276,6 +355,16 @@ class CircuitPatternApp {
     handleMouseDown(e) {
         const pos = this.getMousePos(e);
 
+        // Check if clicking on gradient handle
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('gradient-handle')) {
+            this.isDraggingGradient = true;
+            this.draggingGradientHandle = target.getAttribute('data-handle'); // 'start' or 'end'
+            e.stopPropagation();
+            e.preventDefault();
+            return;
+        }
+
         // Check if clicking on text resize handle
         if (this.currentObject && this.currentObject.type === 'text') {
             const target = e.target;
@@ -335,6 +424,24 @@ class CircuitPatternApp {
 
     handleMouseMove(e) {
         const pos = this.getMousePos(e);
+
+        if (this.isDraggingGradient) {
+            // Update gradient point position
+            if (this.draggingGradientHandle === 'start') {
+                this.gradientStartPoint = { x: pos.x, y: pos.y };
+            } else if (this.draggingGradientHandle === 'end') {
+                this.gradientEndPoint = { x: pos.x, y: pos.y };
+            }
+
+            // Update pattern and re-render
+            if (this.currentPattern) {
+                this.currentPattern.gradientStartPoint = this.gradientStartPoint;
+                this.currentPattern.gradientEndPoint = this.gradientEndPoint;
+                this.renderPattern();
+                this.renderGradientHandles();
+            }
+            return;
+        }
 
         if (this.isMoving && this.currentObject && this.currentObject.type === 'text') {
             // Move text by updating its position
@@ -408,9 +515,11 @@ class CircuitPatternApp {
         this.isDragging = false;
         this.isResizing = false;
         this.isMoving = false;
+        this.isDraggingGradient = false;
         this.dragStart = null;
         this.resizeStart = null;
         this.moveStart = null;
+        this.draggingGradientHandle = null;
 
         if (this.currentObject && this.currentObject.type === 'freehand' && this.currentObject.data.points.length > 0) {
             // Close the path if it has enough points
@@ -434,6 +543,8 @@ class CircuitPatternApp {
         document.getElementById('textFontWeight').value = obj.data.fontWeight || '400';
         document.getElementById('textStrokeWidth').value = obj.data.strokeWidth || 1;
         document.getElementById('strokeWidthValue').textContent = obj.data.strokeWidth || 1;
+        document.getElementById('textLetterSpacing').value = obj.data.letterSpacing || 0;
+        document.getElementById('letterSpacingValue').textContent = obj.data.letterSpacing || 0;
         document.getElementById('textEditorModal').classList.add('show');
     }
 
@@ -449,6 +560,7 @@ class CircuitPatternApp {
         this.editingTextObject.data.fontFamily = document.getElementById('textFontFamily').value;
         this.editingTextObject.data.fontWeight = document.getElementById('textFontWeight').value;
         this.editingTextObject.data.strokeWidth = parseFloat(document.getElementById('textStrokeWidth').value);
+        this.editingTextObject.data.letterSpacing = parseFloat(document.getElementById('textLetterSpacing').value);
 
         this.renderObjects();
         this.updateObjectsList();
@@ -513,6 +625,12 @@ class CircuitPatternApp {
                 text.setAttribute('font-weight', obj.data.fontWeight || '400');
                 text.setAttribute('text-anchor', 'middle');
                 text.setAttribute('dominant-baseline', 'middle');
+
+                // Apply letter spacing
+                const letterSpacing = obj.data.letterSpacing || 0;
+                if (letterSpacing !== 0) {
+                    text.setAttribute('letter-spacing', letterSpacing);
+                }
 
                 // Use line color with 30% opacity for text display
                 const lineColor = document.getElementById('lineColor').value;
@@ -679,6 +797,21 @@ class CircuitPatternApp {
             return;
         }
 
+        const gradientType = document.getElementById('lineGradientType').value;
+
+        // Initialize gradient points if needed
+        if (gradientType !== 'none' && (!this.gradientStartPoint || !this.gradientEndPoint)) {
+            const canvasWidth = parseFloat(this.canvas.getAttribute('width'));
+            const canvasHeight = parseFloat(this.canvas.getAttribute('height'));
+            if (gradientType === 'linear') {
+                this.gradientStartPoint = { x: canvasWidth / 2, y: canvasHeight };
+                this.gradientEndPoint = { x: canvasWidth / 2, y: 0 };
+            } else {
+                this.gradientStartPoint = { x: canvasWidth / 2, y: canvasHeight / 2 };
+                this.gradientEndPoint = { x: canvasWidth / 2, y: canvasHeight / 2 };
+            }
+        }
+
         const options = {
             density: parseInt(document.getElementById('patternDensity').value),
             lineLengthMin: parseInt(document.getElementById('lineLengthMin').value),
@@ -687,6 +820,10 @@ class CircuitPatternApp {
             circleRadius: parseInt(document.getElementById('circleRadius').value),
             style: document.getElementById('patternStyle').value,
             lineColor: document.getElementById('lineColor').value,
+            gradientType: gradientType,
+            gradientColor: document.getElementById('lineGradientColor').value,
+            gradientStartPoint: this.gradientStartPoint,
+            gradientEndPoint: this.gradientEndPoint,
             patternScale: parseFloat(document.getElementById('patternScale').value)
         };
 
@@ -701,6 +838,12 @@ class CircuitPatternApp {
         // Generate pattern using the mask
         const pattern = this.patternGenerator.generateWithMask(maskCanvas, options);
         this.currentPattern = pattern;
+
+        // Store gradient points in pattern
+        if (this.gradientStartPoint && this.gradientEndPoint) {
+            this.currentPattern.gradientStartPoint = this.gradientStartPoint;
+            this.currentPattern.gradientEndPoint = this.gradientEndPoint;
+        }
 
         // Render pattern
         this.renderPattern();
@@ -809,6 +952,7 @@ class CircuitPatternApp {
                     const fontSize = obj.data.fontSize;
                     const fontFamily = obj.data.fontFamily || 'Inter';
                     const strokeWidth = obj.data.strokeWidth || 0;
+                    const letterSpacing = obj.data.letterSpacing || 0;
 
                     let cssWeight = fontWeight;
                     if (typeof fontWeight === 'number' || !isNaN(parseInt(fontWeight))) {
@@ -818,6 +962,7 @@ class CircuitPatternApp {
                     ctx.font = `${cssWeight} ${fontSize}px ${fontFamily}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
+                    ctx.letterSpacing = `${letterSpacing}px`;
 
                     // Apply transform: translate(x,y) scale(sx,sy) translate(-x,-y)
                     ctx.save();
@@ -994,7 +1139,83 @@ class CircuitPatternApp {
 
     renderPattern() {
         if (!this.currentPattern) return;
+
+        // Restore gradient points from pattern if available
+        if (this.currentPattern.gradientStartPoint && this.currentPattern.gradientEndPoint) {
+            this.gradientStartPoint = this.currentPattern.gradientStartPoint;
+            this.gradientEndPoint = this.currentPattern.gradientEndPoint;
+        }
+
         this.patternGenerator.renderToSVG(this.currentPattern, this.canvas);
+
+        // Show gradient handles if editing is enabled
+        if (document.getElementById('editGradientPoints').checked &&
+            this.currentPattern.gradientType !== 'none') {
+            this.renderGradientHandles();
+        }
+    }
+
+    renderGradientHandles() {
+        // Remove existing handles
+        this.removeGradientHandles();
+
+        if (!this.currentPattern || this.currentPattern.gradientType === 'none') return;
+        if (!this.gradientStartPoint || !this.gradientEndPoint) return;
+
+        const handleGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        handleGroup.setAttribute('id', 'gradientHandles');
+
+        // Get line color for start handle
+        const lineColor = document.getElementById('lineColor').value;
+
+        // Start point handle
+        const startHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        startHandle.setAttribute('cx', this.gradientStartPoint.x);
+        startHandle.setAttribute('cy', this.gradientStartPoint.y);
+        startHandle.setAttribute('r', 8);
+        startHandle.setAttribute('fill', lineColor);
+        startHandle.setAttribute('stroke', 'white');
+        startHandle.setAttribute('stroke-width', '2');
+        startHandle.setAttribute('class', 'gradient-handle');
+        startHandle.setAttribute('data-handle', 'start');
+        startHandle.setAttribute('style', 'cursor: move;');
+        handleGroup.appendChild(startHandle);
+
+        // End point handle
+        const endHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        endHandle.setAttribute('cx', this.gradientEndPoint.x);
+        endHandle.setAttribute('cy', this.gradientEndPoint.y);
+        endHandle.setAttribute('r', 8);
+        endHandle.setAttribute('fill', document.getElementById('lineGradientColor').value);
+        endHandle.setAttribute('stroke', 'white');
+        endHandle.setAttribute('stroke-width', '2');
+        endHandle.setAttribute('class', 'gradient-handle');
+        endHandle.setAttribute('data-handle', 'end');
+        endHandle.setAttribute('style', 'cursor: move;');
+        handleGroup.appendChild(endHandle);
+
+        // Draw line connecting the points (for visual reference)
+        if (this.currentPattern.gradientType === 'linear') {
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', this.gradientStartPoint.x);
+            line.setAttribute('y1', this.gradientStartPoint.y);
+            line.setAttribute('x2', this.gradientEndPoint.x);
+            line.setAttribute('y2', this.gradientEndPoint.y);
+            line.setAttribute('stroke', '#ff601f');
+            line.setAttribute('stroke-width', '1');
+            line.setAttribute('stroke-dasharray', '5,5');
+            line.setAttribute('opacity', '0.5');
+            handleGroup.appendChild(line);
+        }
+
+        this.canvas.appendChild(handleGroup);
+    }
+
+    removeGradientHandles() {
+        const handles = this.canvas.querySelector('#gradientHandles');
+        if (handles) {
+            this.canvas.removeChild(handles);
+        }
     }
 
     clear() {
@@ -1024,6 +1245,19 @@ class CircuitPatternApp {
         svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
         svg.setAttribute('width', this.canvas.getAttribute('width'));
         svg.setAttribute('height', this.canvas.getAttribute('height'));
+
+        // Create defs section for gradients
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.appendChild(defs);
+
+        // Copy gradient definitions from the original canvas if they exist
+        const originalDefs = this.canvas.querySelector('defs');
+        if (originalDefs) {
+            const gradients = originalDefs.querySelectorAll('linearGradient, radialGradient');
+            gradients.forEach(gradient => {
+                defs.appendChild(gradient.cloneNode(true));
+            });
+        }
 
         // Add background if not transparent
         const transparent = document.getElementById('transparentBg').checked;
