@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circuit Board Pattern Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Circuit Board Pattern Generator</h1>
+        </header>
+
+        <div class="controls-panel">
+            <div class="control-group">
+                <label for="lineColor">Line Color:</label>
+                <input type="color" id="lineColor" value="#00ff00">
+            </div>
+
+            <div class="control-group">
+                <label for="bgColor">Background:</label>
+                <input type="color" id="bgColor" value="#000000">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="transparentBg" checked>
+                    Transparent
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label for="patternDensity">Pattern Density:</label>
+                <input type="range" id="patternDensity" min="5" max="50" value="13">
+                <span id="densityValue">13</span>
+            </div>
+
+            <div class="control-group">
+                <label for="lineLength">Average Line Length:</label>
+                <input type="range" id="lineLength" min="20" max="200" value="80">
+                <span id="lengthValue">80</span>
+            </div>
+
+            <div class="control-group">
+                <label for="lineThickness">Line Thickness:</label>
+                <input type="range" id="lineThickness" min="1" max="5" value="4">
+                <span id="thicknessValue">4</span>
+            </div>
+
+            <div class="control-group">
+                <label for="circleRadius">Circle Radius:</label>
+                <input type="range" id="circleRadius" min="2" max="10" value="4">
+                <span id="radiusValue">4</span>
+            </div>
+
+            <div class="control-group">
+                <label for="patternStyle">Pattern Style:</label>
+                <select id="patternStyle">
+                    <option value="organic">Organic</option>
+                    <option value="grid">Grid</option>
+                </select>
+            </div>
+
+            <div class="button-group">
+                <button id="generateBtn" class="btn btn-primary">Generate Pattern</button>
+                <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                <button id="downloadBtn" class="btn btn-secondary">Download SVG</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="objects-sidebar">
+                <h3>Objects</h3>
+                <div class="add-object-buttons">
+                    <button class="btn-add-object" data-type="freehand">Add Freehand</button>
+                    <button class="btn-add-object" data-type="text">Add Text</button>
+                    <button class="btn-add-object" data-type="ellipse">Add Ellipse</button>
+                    <button class="btn-add-object" data-type="rectangle">Add Rectangle</button>
+                </div>
+                <div id="objectsList" class="objects-list"></div>
+            </div>
+
+            <div class="canvas-container">
+                <svg id="drawingCanvas" width="800" height="600">
+                    <defs>
+                        <clipPath id="shapeClip">
+                            <path id="shapePath" />
+                        </clipPath>
+                    </defs>
+                    <rect id="backgroundRect" width="100%" height="100%" />
+                    <g id="patternLayer"></g>
+                    <g id="objectsLayer"></g>
+                </svg>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <p>Add objects (freehand, text, ellipse, or rectangle) from the left sidebar, then click "Generate Pattern" to fill them with a circuit board pattern.</p>
+        </div>
+    </div>
+
+    <!-- Text Editor Popup -->
+    <div id="textEditorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Text</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="control-group">
+                    <label for="textContent">Text Content:</label>
+                    <input type="text" id="textContent" placeholder="Enter text">
+                </div>
+                <div class="control-group">
+                    <label for="textFontFamily">Font Family:</label>
+                    <select id="textFontFamily">
+                        <option value="Arial">Arial</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Palatino">Palatino</option>
+                        <option value="Garamond">Garamond</option>
+                        <option value="Comic Sans MS">Comic Sans MS</option>
+                        <option value="Impact">Impact</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="textFontWeight">Font Weight:</label>
+                    <select id="textFontWeight">
+                        <option value="100">100 - Thin</option>
+                        <option value="200">200 - Extra Light</option>
+                        <option value="300">300 - Light</option>
+                        <option value="400" selected>400 - Normal</option>
+                        <option value="500">500 - Medium</option>
+                        <option value="600">600 - Semi Bold</option>
+                        <option value="700">700 - Bold</option>
+                        <option value="800">800 - Extra Bold</option>
+                        <option value="900">900 - Black</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="textEditorSave" class="btn btn-primary">Save</button>
+                <button id="textEditorCancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="pattern-generator.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
