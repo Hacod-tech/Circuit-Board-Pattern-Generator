@@ -80,8 +80,16 @@ class CircuitPatternApp {
             document.getElementById('densityValue').textContent = e.target.value;
         });
 
-        document.getElementById('lineLength').addEventListener('input', (e) => {
-            document.getElementById('lengthValue').textContent = e.target.value;
+        document.getElementById('lineLengthMin').addEventListener('input', (e) => {
+            document.getElementById('lengthMinValue').textContent = e.target.value;
+        });
+
+        document.getElementById('lineLengthMax').addEventListener('input', (e) => {
+            document.getElementById('lengthMaxValue').textContent = e.target.value;
+        });
+
+        document.getElementById('patternScale').addEventListener('input', (e) => {
+            document.getElementById('scaleValue').textContent = parseFloat(e.target.value).toFixed(1);
         });
 
         document.getElementById('lineThickness').addEventListener('input', (e) => {
@@ -107,6 +115,15 @@ class CircuitPatternApp {
 
         // Text editor modal
         const textModal = document.getElementById('textEditorModal');
+        document.getElementById('textStrokeWidth').addEventListener('input', (e) => {
+            document.getElementById('strokeWidthValue').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+
+        // Update text colors when line color changes
+        document.getElementById('lineColor').addEventListener('input', () => {
+            this.renderObjects();
+        });
+
         document.getElementById('textEditorSave').addEventListener('click', () => this.saveTextEdit());
         document.getElementById('textEditorCancel').addEventListener('click', () => this.closeTextEditor());
         document.querySelector('.modal-close').addEventListener('click', () => this.closeTextEditor());
@@ -147,8 +164,9 @@ class CircuitPatternApp {
                     y: 300,
                     text: 'Text',
                     fontSize: 48,
-                    fontFamily: 'Arial',
+                    fontFamily: 'Inter',
                     fontWeight: '400',
+                    strokeWidth: 1,
                     scaleX: 1,
                     scaleY: 1
                 };
@@ -412,8 +430,10 @@ class CircuitPatternApp {
     openTextEditor(obj) {
         this.editingTextObject = obj;
         document.getElementById('textContent').value = obj.data.text;
-        document.getElementById('textFontFamily').value = obj.data.fontFamily || 'Arial';
+        document.getElementById('textFontFamily').value = obj.data.fontFamily || 'Inter';
         document.getElementById('textFontWeight').value = obj.data.fontWeight || '400';
+        document.getElementById('textStrokeWidth').value = obj.data.strokeWidth || 1;
+        document.getElementById('strokeWidthValue').textContent = obj.data.strokeWidth || 1;
         document.getElementById('textEditorModal').classList.add('show');
     }
 
@@ -428,6 +448,7 @@ class CircuitPatternApp {
         this.editingTextObject.data.text = document.getElementById('textContent').value;
         this.editingTextObject.data.fontFamily = document.getElementById('textFontFamily').value;
         this.editingTextObject.data.fontWeight = document.getElementById('textFontWeight').value;
+        this.editingTextObject.data.strokeWidth = parseFloat(document.getElementById('textStrokeWidth').value);
 
         this.renderObjects();
         this.updateObjectsList();
@@ -488,11 +509,22 @@ class CircuitPatternApp {
                 text.setAttribute('x', obj.data.x);
                 text.setAttribute('y', obj.data.y);
                 text.setAttribute('font-size', obj.data.fontSize);
-                text.setAttribute('font-family', obj.data.fontFamily || 'Arial');
+                text.setAttribute('font-family', obj.data.fontFamily || 'Inter');
                 text.setAttribute('font-weight', obj.data.fontWeight || '400');
-                text.setAttribute('fill', 'none');
                 text.setAttribute('text-anchor', 'middle');
                 text.setAttribute('dominant-baseline', 'middle');
+
+                // Use line color with 30% opacity for text display
+                const lineColor = document.getElementById('lineColor').value;
+                const rgb = this.hexToRgb(lineColor);
+                const fillColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`;
+                text.setAttribute('fill', fillColor);
+
+                const strokeWidth = obj.data.strokeWidth || 1;
+                if (strokeWidth > 0) {
+                    text.setAttribute('stroke', fillColor);
+                    text.setAttribute('stroke-width', strokeWidth);
+                }
                 text.textContent = obj.data.text;
                 // Make text cursor indicate it's draggable when selected
                 if (obj.id === this.currentObjectId) {
@@ -649,11 +681,13 @@ class CircuitPatternApp {
 
         const options = {
             density: parseInt(document.getElementById('patternDensity').value),
-            lineLength: parseInt(document.getElementById('lineLength').value),
+            lineLengthMin: parseInt(document.getElementById('lineLengthMin').value),
+            lineLengthMax: parseInt(document.getElementById('lineLengthMax').value),
             lineThickness: parseInt(document.getElementById('lineThickness').value),
             circleRadius: parseInt(document.getElementById('circleRadius').value),
             style: document.getElementById('patternStyle').value,
-            lineColor: document.getElementById('lineColor').value
+            lineColor: document.getElementById('lineColor').value,
+            patternScale: parseFloat(document.getElementById('patternScale').value)
         };
 
         // Create a rasterized mask of all objects
@@ -703,6 +737,15 @@ class CircuitPatternApp {
             default:
                 return null;
         }
+    }
+
+    hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        return { r, g, b };
     }
 
     getTextBBox(obj) {
@@ -759,12 +802,13 @@ class CircuitPatternApp {
                     break;
 
                 case 'text':
-                    // Render text with full fill
+                    // Render text with full fill and stroke
                     const scaleX = obj.data.scaleX || 1;
                     const scaleY = obj.data.scaleY || 1;
                     const fontWeight = obj.data.fontWeight || '400';
                     const fontSize = obj.data.fontSize;
-                    const fontFamily = obj.data.fontFamily || 'Arial';
+                    const fontFamily = obj.data.fontFamily || 'Inter';
+                    const strokeWidth = obj.data.strokeWidth || 0;
 
                     let cssWeight = fontWeight;
                     if (typeof fontWeight === 'number' || !isNaN(parseInt(fontWeight))) {
@@ -780,6 +824,12 @@ class CircuitPatternApp {
                     ctx.translate(obj.data.x, obj.data.y);
                     ctx.scale(scaleX, scaleY);
                     ctx.translate(-obj.data.x, -obj.data.y);
+
+                    // Draw stroke first (if any), then fill
+                    if (strokeWidth > 0) {
+                        ctx.lineWidth = strokeWidth;
+                        ctx.strokeText(obj.data.text, obj.data.x, obj.data.y);
+                    }
                     ctx.fillText(obj.data.text, obj.data.x, obj.data.y);
                     ctx.restore();
                     hasObjects = true;

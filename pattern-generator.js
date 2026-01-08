@@ -14,11 +14,13 @@ class PatternGenerator {
     generateWithMask(maskCanvas, options = {}) {
         const {
             density = 20,
-            lineLength = 80,
+            lineLengthMin = 20,
+            lineLengthMax = 150,
             lineThickness = 2,
             circleRadius = 4,
             style = 'organic',
-            lineColor = '#00ff00'
+            lineColor = '#00ff00',
+            patternScale = 1
         } = options;
 
         this.segments = [];
@@ -28,68 +30,83 @@ class PatternGenerator {
         const canvasWidth = maskCanvas.width;
         const canvasHeight = maskCanvas.height;
 
+        // Scale the bounds for pattern generation
+        const scaledWidth = canvasWidth / patternScale;
+        const scaledHeight = canvasHeight / patternScale;
+
+        // Scale all dimensions: thickness, radius, and line lengths
+        const scaledLineThickness = lineThickness * patternScale;
+        const scaledCircleRadius = circleRadius * patternScale;
+        const scaledLineLengthMin = lineLengthMin * patternScale;
+        const scaledLineLengthMax = lineLengthMax * patternScale;
+        // Density scales inversely to maintain same number of lines per unit area
+        const scaledDensity = density / patternScale;
+
         const bounds = {
             x: 0,
             y: 0,
-            width: canvasWidth,
-            height: canvasHeight
+            width: scaledWidth,
+            height: scaledHeight
         };
 
-        const gridSize = density;
-        const minSpacing = Math.max(gridSize * 0.3, lineThickness + circleRadius);
+        // Generate segments with variable length (between min and max)
+        // Use average length for generation, but allow variation
+        const avgLength = (scaledLineLengthMin + scaledLineLengthMax) / 2;
+        const gridSize = scaledDensity;
+        const minSpacing = Math.max(gridSize * 0.3, scaledLineThickness + scaledCircleRadius);
 
-        // Create potential segments
-        const potentialSegments = this.createPotentialSegments(bounds, gridSize, style, lineLength);
+        // Create potential segments with variable lengths
+        const potentialSegments = this.createPotentialSegments(bounds, gridSize, style, avgLength, scaledLineLengthMin, scaledLineLengthMax);
 
-        // Filter segments to only those inside the mask (black pixels)
-        // Require both endpoints to be inside, and majority of the segment
+        // Filter segments to only those inside the mask (simplified check)
         const validSegments = potentialSegments.filter(segment => {
-            // First check: both endpoints must be inside the mask
-            const startInside = this.isPointInMask(segment.start, maskCanvas, ctx);
-            const endInside = this.isPointInMask(segment.end, maskCanvas, ctx);
+            // Scale segment coordinates to original canvas space for mask checking
+            const scaledStart = {
+                x: segment.start.x * patternScale,
+                y: segment.start.y * patternScale
+            };
+            const scaledEnd = {
+                x: segment.end.x * patternScale,
+                y: segment.end.y * patternScale
+            };
+
+            // Check endpoints only (faster)
+            const startInside = this.isPointInMask(scaledStart, maskCanvas, ctx);
+            const endInside = this.isPointInMask(scaledEnd, maskCanvas, ctx);
 
             if (!startInside || !endInside) {
-                return false; // Both ends must be inside
+                return false;
             }
 
-            // For curved segments, check all intermediate points
+            // For curved segments, check midpoint
             if (segment.points && segment.points.length > 2) {
-                // Check if majority of intermediate points are inside the mask
-                const intermediatePoints = segment.points.slice(1, -1); // Exclude start and end
-                if (intermediatePoints.length > 0) {
-                    const pointsInside = intermediatePoints.filter(p => this.isPointInMask(p, maskCanvas, ctx));
-                    return pointsInside.length >= intermediatePoints.length * 0.7; // At least 70% of intermediate points inside
-                }
-                return true; // Only start and end points, both are inside
-            }
-
-            // For straight segments, check several points along the line
-            const numChecks = 10; // Check 10 points along the segment
-            let pointsInside = 0;
-
-            for (let i = 1; i < numChecks; i++) { // Skip 0 and numChecks (start and end already checked)
-                const t = i / numChecks;
-                const checkPoint = {
-                    x: segment.start.x + (segment.end.x - segment.start.x) * t,
-                    y: segment.start.y + (segment.end.y - segment.start.y) * t
+                const midPoint = segment.points[Math.floor(segment.points.length / 2)];
+                const scaledMid = {
+                    x: midPoint.x * patternScale,
+                    y: midPoint.y * patternScale
                 };
-                if (this.isPointInMask(checkPoint, maskCanvas, ctx)) {
-                    pointsInside++;
-                }
+                return this.isPointInMask(scaledMid, maskCanvas, ctx);
             }
 
-            // Require at least 70% of intermediate points to be inside the mask
-            return pointsInside >= (numChecks - 1) * 0.7;
+            // For straight segments, check midpoint only
+            const midPoint = {
+                x: (scaledStart.x + scaledEnd.x) / 2,
+                y: (scaledStart.y + scaledEnd.y) / 2
+            };
+            return this.isPointInMask(midPoint, maskCanvas, ctx);
         });
 
-        // Sort by length (longer first)
+        // Sort by length (longer first) - this ensures longest lines are placed first
         validSegments.sort((a, b) => b.length - a.length);
 
         // Place segments starting from longest
         const placedSegments = [];
         for (const segment of validSegments) {
-            if (this.canPlaceSegment(segment, placedSegments, minSpacing, lineThickness, circleRadius)) {
-                placedSegments.push(segment);
+            // Only place if length is within range
+            if (segment.length >= scaledLineLengthMin && segment.length <= scaledLineLengthMax) {
+                if (this.canPlaceSegment(segment, placedSegments, minSpacing, scaledLineThickness, scaledCircleRadius)) {
+                    placedSegments.push(segment);
+                }
             }
         }
 
@@ -100,14 +117,61 @@ class PatternGenerator {
         const endpoints = this.getEndpoints(placedSegments, forks);
 
         // Shorten segments to leave space for circles at endpoints (unless at forks)
-        const shortenedSegments = this.shortenSegmentsForCircles(placedSegments, forks, circleRadius);
+        const shortenedSegments = this.shortenSegmentsForCircles(placedSegments, forks, scaledCircleRadius);
+
+        // Scale all coordinates back to original canvas space
+        const scaledSegments = shortenedSegments.map(segment => {
+            if (segment.points && segment.points.length > 2) {
+                // Curved segment
+                return {
+                    ...segment,
+                    start: {
+                        x: segment.start.x * patternScale,
+                        y: segment.start.y * patternScale
+                    },
+                    end: {
+                        x: segment.end.x * patternScale,
+                        y: segment.end.y * patternScale
+                    },
+                    points: segment.points.map(p => ({
+                        x: p.x * patternScale,
+                        y: p.y * patternScale
+                    }))
+                };
+            } else {
+                // Straight segment
+                return {
+                    ...segment,
+                    start: {
+                        x: segment.start.x * patternScale,
+                        y: segment.start.y * patternScale
+                    },
+                    end: {
+                        x: segment.end.x * patternScale,
+                        y: segment.end.y * patternScale
+                    }
+                };
+            }
+        });
+
+        const scaledCircles = endpoints.map(circle => ({
+            ...circle,
+            x: circle.x * patternScale,
+            y: circle.y * patternScale
+        }));
+
+        const scaledForks = forks.map(fork => ({
+            ...fork,
+            x: fork.x * patternScale,
+            y: fork.y * patternScale
+        }));
 
         return {
-            segments: shortenedSegments,
-            circles: endpoints,
-            forks: forks,
-            lineThickness,
-            circleRadius,
+            segments: scaledSegments,
+            circles: scaledCircles,
+            forks: scaledForks,
+            lineThickness: scaledLineThickness,
+            circleRadius: scaledCircleRadius,
             lineColor
         };
     }
@@ -365,17 +429,25 @@ class PatternGenerator {
      * @param {string} style - Pattern style (grid or organic)
      * @param {number} lineLength - Average length for segments
      */
-    createPotentialSegments(bounds, gridSize, style, lineLength = 80) {
+    createPotentialSegments(bounds, gridSize, style, lineLength = 80, minLength = null, maxLength = null) {
         const segments = [];
         const angles = [0, 45, 90, 135]; // 45-degree angles
+
+        // Use min/max if provided, otherwise use lineLength with variation
+        const useRange = minLength !== null && maxLength !== null;
+        const getLength = () => {
+            if (useRange) {
+                return minLength + Math.random() * (maxLength - minLength);
+            }
+            return lineLength * (0.7 + Math.random() * 0.6); // 70% to 130% of lineLength
+        };
 
         if (style === 'grid') {
             // Grid-based pattern - density controls grid spacing
             for (let x = bounds.x; x < bounds.x + bounds.width; x += gridSize) {
                 for (let y = bounds.y; y < bounds.y + bounds.height; y += gridSize) {
                     const angle = angles[Math.floor(Math.random() * angles.length)];
-                    // Use lineLength with some variation
-                    const length = lineLength * (0.7 + Math.random() * 0.6); // 70% to 130% of lineLength
+                    const length = getLength();
                     segments.push(this.createSegment(x, y, angle, length));
                 }
             }
@@ -386,8 +458,7 @@ class PatternGenerator {
                 const startX = bounds.x + Math.random() * bounds.width;
                 const startY = bounds.y + Math.random() * bounds.height;
                 const angle = angles[Math.floor(Math.random() * angles.length)];
-                // Use lineLength with some variation
-                const length = lineLength * (0.7 + Math.random() * 0.6); // 70% to 130% of lineLength
+                const length = getLength();
                 const numCurves = Math.floor(Math.random() * 3); // 0-2 curves
                 segments.push(this.createCurvedSegment(startX, startY, angle, length, numCurves));
             }
